@@ -241,7 +241,7 @@ function HomePage({ onStudent, onTeacher }) {
       <div className="fu" style={{ textAlign: "center", marginBottom: 36 }}>
         <div style={{ fontSize: 62, marginBottom: 10 }}>🏫</div>
         <h1 style={{ fontSize: 24, fontWeight: 900, color: "#2C6FAC", marginBottom: 6 }}>
-          학부모 상담 준비 시스템
+          상담준비 시스템
         </h1>
         <p style={{ color: "#7A8299", fontSize: 14 }}>
           6학년 심층 설문 · 1차/2차 비교 · AI 상담 분석
