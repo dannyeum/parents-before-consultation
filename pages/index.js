@@ -854,12 +854,22 @@ function StudentDetail({ survey, allSurveys, onBack }) {
   // 첫 렌더 시 기존 분석 결과 불러오기
   useEffect(() => {
     if (!survey?.id) { setInitLoad(false); return; }
+
+    // Firestore Timestamp → 문자열 안전 변환
+    const toStr = (ts) => {
+      if (!ts) return "";
+      if (typeof ts === "string") return ts;
+      if (ts.toDate) return ts.toDate().toLocaleString("ko-KR");
+      if (ts.seconds) return new Date(ts.seconds * 1000).toLocaleString("ko-KR");
+      return String(ts);
+    };
+
     Promise.all([
-      loadAiResult(survey.id, "analysis"),
-      loadAiResult(survey.id, "script"),
+      loadAiResult(survey.id, "analysis").catch(() => null),
+      loadAiResult(survey.id, "script").catch(() => null),
     ]).then(([savedAi, savedScript]) => {
-      if (savedAi)     { setAiRes(savedAi.data);   setAiSavedAt(savedAi.savedAt); }
-      if (savedScript) { setScript(savedScript.data); setScriptSavedAt(savedScript.savedAt); }
+      if (savedAi?.data)     { setAiRes(savedAi.data);     setAiSavedAt(toStr(savedAi.savedAt)); }
+      if (savedScript?.data) { setScript(savedScript.data); setScriptSavedAt(toStr(savedScript.savedAt)); }
       setInitLoad(false);
     }).catch(() => setInitLoad(false));
   }, [survey?.id]);
@@ -920,10 +930,10 @@ function StudentDetail({ survey, allSurveys, onBack }) {
     try {
       const result = await callAI(prompt);
       setAiRes(result);
-      // Firebase에 저장
+      // Firebase에 저장 (savedAt을 문자열로 저장)
       const now = new Date().toLocaleString("ko-KR");
       setAiSavedAt(now);
-      await saveAiResult(survey.id, "analysis", { data: result, savedAt: now });
+      await saveAiResult(survey.id, "analysis", result, now);
     }
     catch (e) { setAiRes({ error: "AI 오류: " + e.message }); }
     setAL(false);
@@ -938,7 +948,7 @@ function StudentDetail({ survey, allSurveys, onBack }) {
       // Firebase에 저장
       const now = new Date().toLocaleString("ko-KR");
       setScriptSavedAt(now);
-      await saveAiResult(survey.id, "script", { data: result, savedAt: now });
+      await saveAiResult(survey.id, "script", result, now);
     }
     catch (e) { setScript({ error: "스크립트 오류: " + e.message }); }
     setSL(false);
