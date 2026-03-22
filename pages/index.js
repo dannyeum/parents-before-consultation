@@ -1,6 +1,6 @@
 // pages/index.js
 import { useState, useEffect, useRef } from "react";
-import { saveSurvey, getSurveys, deleteSurvey, deleteAllSurveys } from "../lib/firebase";
+import { saveSurvey, getSurveys, deleteSurvey, deleteAllSurveys, saveAiResult, loadAiResult } from "../lib/firebase";
 
 /* ══════════════════════════════════════════════════════
    상수
@@ -593,7 +593,7 @@ function TeacherLogin({ onLogin, onBack }) {
           style={{ marginBottom: 8 }}
         />
         {err && <p style={{ color: "#F47C9A", fontSize: 13, marginBottom: 8 }}>{err}</p>}
-        <p style={{ fontSize: 11, color: "#C8CDD8", marginBottom: 16 }}>힌트: t******1234</p>
+        <p style={{ fontSize: 11, color: "#C8CDD8", marginBottom: 16 }}>힌트: t*******</p>
         <div style={{ display: "flex", gap: 10 }}>
           <Btn onClick={onBack} color="ghost" style={{ flex: 1, justifyContent: "center" }}>취소</Btn>
           <Btn onClick={go} color="mint" style={{ flex: 2, justifyContent: "center" }}>로그인</Btn>
@@ -842,11 +842,27 @@ function Dashboard({ onBack, onSelect, onLogout }) {
    학생 상세 보기
 ══════════════════════════════════════════════════════ */
 function StudentDetail({ survey, allSurveys, onBack }) {
-  const [tab, setTab]     = useState("answers"); // answers | compare | ai
-  const [aiRes, setAiRes] = useState(null);
-  const [aiLoad, setAL]   = useState(false);
+  const [tab, setTab]       = useState("answers");
+  const [aiRes, setAiRes]   = useState(null);
+  const [aiLoad, setAL]     = useState(false);
   const [script, setScript] = useState(null);
   const [scrLoad, setSL]    = useState(false);
+  const [aiSavedAt, setAiSavedAt]     = useState(null);
+  const [scriptSavedAt, setScriptSavedAt] = useState(null);
+  const [initLoad, setInitLoad] = useState(true); // 첫 로딩 중
+
+  // 첫 렌더 시 기존 분석 결과 불러오기
+  useEffect(() => {
+    if (!survey?.id) { setInitLoad(false); return; }
+    Promise.all([
+      loadAiResult(survey.id, "analysis"),
+      loadAiResult(survey.id, "script"),
+    ]).then(([savedAi, savedScript]) => {
+      if (savedAi)     { setAiRes(savedAi.data);   setAiSavedAt(savedAi.savedAt); }
+      if (savedScript) { setScript(savedScript.data); setScriptSavedAt(savedScript.savedAt); }
+      setInitLoad(false);
+    }).catch(() => setInitLoad(false));
+  }, [survey?.id]);
 
   const otherTerm = survey.term === "1차" ? "2차" : "1차";
   const paired = allSurveys.find(s =>
@@ -877,9 +893,20 @@ function StudentDetail({ survey, allSurveys, onBack }) {
       body: JSON.stringify({ prompt, maxTokens }),
     });
     const data = await res.json();
-    if (data.error) throw new Error(JSON.stringify(data.error));
-    const text = data.content?.map(c => c.text || "").join("").replace(/```json|```/g, "").trim();
-    return JSON.parse(text);
+    // 에러 응답 처리
+    if (data.error) throw new Error(typeof data.error === "string" ? data.error : JSON.stringify(data.error));
+    // Claude 응답에서 텍스트 추출
+    const raw = data.content?.map(c => c.text || "").join("") || "";
+    // JSON 블록 추출 (```json ... ``` 또는 { ... } 형태 모두 처리)
+    const jsonMatch = raw.match(/```json\s*([\s\S]*?)```/) ||
+                      raw.match(/```([\s\S]*?)```/) ||
+                      raw.match(/({[\s\S]*})/);
+    const jsonStr = jsonMatch ? jsonMatch[1].trim() : raw.trim();
+    try {
+      return JSON.parse(jsonStr);
+    } catch {
+      throw new Error("JSON 파싱 실패: " + jsonStr.substring(0, 100));
+    }
   };
 
   const genAI = async () => {
@@ -890,16 +917,30 @@ function StudentDetail({ survey, allSurveys, onBack }) {
     const prompt = `초등학교 6학년 학생 학부모 상담 사전 설문${paired ? " (1·2차 비교포함)" : ""}:\n${cmp}\n
 아래 JSON만 반환 (마크다운 없이):
 {"summary":"요약 2문장","anxietyLevel":"낮음|보통|높음","friendshipLevel":"원만|보통|어려움","selfLevel":"긍정|보통|부정","points":["포인트1","포인트2","포인트3"],"positiveMessage":"학부모 전달 메시지 2문장","changeNote":"${paired ? "1→2차 변화 서술" : ""}","flagKeywords":["키워드"],"strengthKeywords":["키워드"]}`;
-    try { setAiRes(await callAI(prompt)); }
-    catch { setAiRes({ error: "AI 오류가 발생했습니다. 잠시 후 다시 시도해주세요." }); }
+    try {
+      const result = await callAI(prompt);
+      setAiRes(result);
+      // Firebase에 저장
+      const now = new Date().toLocaleString("ko-KR");
+      setAiSavedAt(now);
+      await saveAiResult(survey.id, "analysis", { data: result, savedAt: now });
+    }
+    catch (e) { setAiRes({ error: "AI 오류: " + e.message }); }
     setAL(false);
   };
 
   const genScript = async () => {
     setSL(true); setScript(null);
     const prompt = `교사용 학부모 상담 스크립트 JSON만 반환:\n${buildText(survey)}\n{"opening":"인사 2문장","strengths":"강점 칭찬 2~3문장","improvements":"개선 지원 2~3문장","closing":"마무리 2문장"}`;
-    try { setScript(await callAI(prompt, 800)); }
-    catch { setScript({ error: "생성 오류" }); }
+    try {
+      const result = await callAI(prompt, 800);
+      setScript(result);
+      // Firebase에 저장
+      const now = new Date().toLocaleString("ko-KR");
+      setScriptSavedAt(now);
+      await saveAiResult(survey.id, "script", { data: result, savedAt: now });
+    }
+    catch (e) { setScript({ error: "스크립트 오류: " + e.message }); }
     setSL(false);
   };
 
@@ -1059,11 +1100,26 @@ function StudentDetail({ survey, allSurveys, onBack }) {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
                 <div>
                   <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>🤖 AI 상담 분석</h3>
-                  <p style={{ color: "#7A8299", fontSize: 13 }}>심리·불안·친구관계·자아상태 종합 분석{paired ? " + 1·2차 변화" : ""}</p>
+                  {initLoad ? (
+                    <p style={{ color: "#7A8299", fontSize: 12 }}>⏳ 저장된 분석 불러오는 중...</p>
+                  ) : aiSavedAt && !aiLoad ? (
+                    <p style={{ color: "#3BBFA3", fontSize: 12, fontWeight: 600 }}>✅ 저장된 분석 있음 · {aiSavedAt}</p>
+                  ) : (
+                    <p style={{ color: "#7A8299", fontSize: 13 }}>심리·불안·친구관계·자아상태 종합 분석{paired ? " + 1·2차 변화" : ""}</p>
+                  )}
                 </div>
-                <Btn onClick={genAI} disabled={aiLoad} color="blue">
-                  {aiLoad ? <><div className="spinner" />분석 중...</> : "✨ AI 분석"}
-                </Btn>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {aiRes && !aiRes.error && !aiLoad && (
+                    <Btn onClick={genAI} disabled={aiLoad} color="ghost" size="sm">
+                      🔄 재분석
+                    </Btn>
+                  )}
+                  {(!aiRes || aiRes.error) && (
+                    <Btn onClick={genAI} disabled={aiLoad || initLoad} color="blue">
+                      {aiLoad ? <><div className="spinner" />분석 중...</> : "✨ AI 분석"}
+                    </Btn>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1115,11 +1171,26 @@ function StudentDetail({ survey, allSurveys, onBack }) {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
                 <div>
                   <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>📝 상담 스크립트</h3>
-                  <p style={{ color: "#7A8299", fontSize: 13 }}>학부모 상담에 바로 사용 가능</p>
+                  {initLoad ? (
+                    <p style={{ color: "#7A8299", fontSize: 12 }}>⏳ 저장된 스크립트 불러오는 중...</p>
+                  ) : scriptSavedAt && !scrLoad ? (
+                    <p style={{ color: "#9B7FD4", fontSize: 12, fontWeight: 600 }}>✅ 저장된 스크립트 있음 · {scriptSavedAt}</p>
+                  ) : (
+                    <p style={{ color: "#7A8299", fontSize: 13 }}>학부모 상담에 바로 사용 가능</p>
+                  )}
                 </div>
-                <Btn onClick={genScript} disabled={scrLoad} color="purple">
-                  {scrLoad ? <><div className="spinner" />생성 중...</> : "📜 스크립트"}
-                </Btn>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {script && !script.error && !scrLoad && (
+                    <Btn onClick={genScript} disabled={scrLoad} color="ghost" size="sm">
+                      🔄 재생성
+                    </Btn>
+                  )}
+                  {(!script || script.error) && (
+                    <Btn onClick={genScript} disabled={scrLoad || initLoad} color="purple">
+                      {scrLoad ? <><div className="spinner" />생성 중...</> : "📜 스크립트"}
+                    </Btn>
+                  )}
+                </div>
               </div>
             </div>
             {script && !script.error && (
