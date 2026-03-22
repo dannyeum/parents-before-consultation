@@ -7,61 +7,6 @@ import {
 } from "../lib/firebase";
 
 /* ══════════════════════════════════════════════════════
-   GLOBAL STYLES
-══════════════════════════════════════════════════════ */
-const GS = () => (
-  <style global jsx>{`
-    @import url('https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap');
-    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
-    :root {
-      --blue:#4A90D9; --blue-dk:#2C6FAC; --blue-lt:#EAF4FB; --blue-2:#D4EAFA;
-      --mint:#3BBFA3; --mint-lt:#D4F5EE;
-      --peach:#FF8C69; --peach-lt:#FFEEE8;
-      --yellow:#FFD166; --yellow-lt:#FFF7E0;
-      --purple:#9B7FD4; --purple-lt:#EDE7FF;
-      --rose:#F47C9A; --rose-lt:#FFEBF2;
-      --teal:#2EC4B6; --teal-lt:#E0FAF7;
-      --g100:#F6F7FA; --g200:#E8EAF0; --g300:#C8CDD8;
-      --g500:#7A8299; --g700:#3D4461; --g900:#1A1F36; --w:#FFFFFF;
-      --sh-sm:0 2px 8px rgba(74,144,217,.10);
-      --sh-md:0 4px 20px rgba(74,144,217,.15);
-      --sh-lg:0 8px 40px rgba(74,144,217,.22);
-      --r-sm:12px; --r-md:18px; --r-lg:28px;
-    }
-    body { font-family:'Noto Sans KR',sans-serif; background:var(--blue-lt); color:var(--g900); min-height:100vh; -webkit-font-smoothing:antialiased; }
-    @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
-    @keyframes spin   { to{transform:rotate(360deg)} }
-    .fu  { animation:fadeUp .4s ease both }
-    .fu1 { animation:fadeUp .4s .08s ease both }
-    .fu2 { animation:fadeUp .4s .16s ease both }
-    .card { background:var(--w); border-radius:var(--r-md); padding:24px; box-shadow:var(--sh-sm); }
-    .lift { transition:transform .2s,box-shadow .2s; cursor:pointer; }
-    .lift:hover { transform:translateY(-4px); box-shadow:var(--sh-lg)!important; }
-    textarea, input[type=text], input[type=password], select {
-      font-family:'Noto Sans KR',sans-serif; font-size:15px; color:var(--g900);
-      border:2px solid var(--g200); border-radius:var(--r-sm); padding:12px 16px;
-      width:100%; outline:none; transition:border-color .2s,box-shadow .2s;
-      background:var(--w); appearance:none;
-    }
-    textarea { resize:vertical; }
-    textarea:focus, input:focus, select:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(74,144,217,.15); }
-    .spinner { width:20px; height:20px; border:3px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .8s linear infinite; flex-shrink:0; }
-    .kw-alert    { background:#FFE5E5; color:#c0325a; border-radius:4px; padding:1px 4px; font-weight:700; }
-    .kw-strength { background:#FFF7E0; color:#b8860b; border-radius:4px; padding:1px 4px; font-weight:700; }
-    .lk-btn { border:2px solid var(--g200); background:var(--g100); border-radius:10px; padding:10px 4px; cursor:pointer; font-size:12px; font-family:'Noto Sans KR'; font-weight:500; transition:all .18s; color:var(--g700); text-align:center; width:100%; }
-    .lk-btn.on { background:var(--blue-lt); border-color:var(--blue); color:var(--blue-dk); font-weight:700; }
-    .mood-btn { border:2px solid var(--g200); background:var(--g100); border-radius:var(--r-sm); padding:12px 8px; cursor:pointer; font-size:14px; font-family:'Noto Sans KR'; transition:all .18s; color:var(--g900); text-align:center; width:100%; }
-    .mood-btn.on { background:var(--blue-lt); border-color:var(--blue); font-weight:700; }
-    .tab-btn { padding:8px 14px; border:2px solid var(--g200); border-radius:var(--r-sm); cursor:pointer; font-family:'Noto Sans KR'; font-weight:400; font-size:13px; transition:all .18s; background:transparent; color:var(--g500); }
-    .tab-btn.on { background:var(--blue-lt); color:var(--blue-dk); font-weight:700; border-color:var(--blue); }
-    .sel-btn { border:2px solid var(--g200); background:var(--g100); border-radius:var(--r-sm); padding:12px 16px; cursor:pointer; font-family:'Noto Sans KR'; font-size:14px; transition:all .18s; color:var(--g900); text-align:center; width:100%; }
-    .sel-btn.on { background:var(--blue-lt); border-color:var(--blue); font-weight:700; color:var(--blue-dk); }
-    .bar-wrap { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
-    .bar { height:10px; border-radius:999px; transition:width .6s ease; }
-  `}</style>
-);
-
-/* ══════════════════════════════════════════════════════
    SURVEY SCHEMA
 ══════════════════════════════════════════════════════ */
 const SECTIONS = [
@@ -251,7 +196,7 @@ function StudentSurvey({ onBack }) {
   const [step, setStep]     = useState("class");
   const [classInfo, setCI]  = useState({ year: 2026, grade: 6, classNum: "" });
   const [teachers, setTeachers] = useState([]);
-  const [teacherInfo, setTI] = useState(null); // 선택된 담임
+  const [teacherInfo, setTI] = useState(null);
   const [name, setName]     = useState("");
   const [term, setTerm]     = useState("1차");
   const [answers, setAns]   = useState({});
@@ -260,13 +205,19 @@ function StudentSurvey({ onBack }) {
   const topRef = useRef(null);
   const total  = SECTIONS.length;
 
-  // 반은 1~8 고정이므로 Firebase 조회 불필요
+  // Firebase에 담임이 등록되어 있으면 이름 표시용으로 로드 (없어도 동작)
+  useEffect(() => {
+    getAllTeachers(classInfo.year).catch(() => []).then(list => {
+      setTeachers(list.filter(t => t.grade === Number(classInfo.grade)));
+    });
+  }, [classInfo.year, classInfo.grade]);
 
   useEffect(() => { topRef.current?.scrollTo({ top:0, behavior:"smooth" }); }, [step]);
 
   const set = (qid, val) => setAns(a => ({ ...a, [qid]: val }));
 
-  const canNextClass = () => !!classInfo.classNum;
+  // ★ classNum 이 비어있지 않으면 무조건 활성화
+  const canNextClass = () => String(classInfo.classNum).trim() !== "";
 
   const canNextSection = () => {
     if (step === -1) return name.trim().length > 0;
@@ -279,7 +230,9 @@ function StudentSurvey({ onBack }) {
   };
 
   const handleClassNext = () => {
-    setTI(null); // Firebase 담임 연결 없이 직접 선택
+    // Firebase에 담임 정보 있으면 연결, 없어도 진행
+    const t = teachers.find(t => t.classNum === Number(classInfo.classNum));
+    setTI(t || null);
     setStep(-1);
   };
 
@@ -370,13 +323,18 @@ function StudentSurvey({ onBack }) {
 
               <Field label="반" required>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
-                  {CLASS_NUMS.map(n => (
-                    <button key={n} type="button"
-                      className={`sel-btn${classInfo.classNum === String(n) ? " on" : ""}`}
-                      onClick={() => setCI(c => ({ ...c, classNum: String(n) }))}>
-                      <div style={{ fontWeight:700, fontSize:16 }}>{n}반</div>
-                    </button>
-                  ))}
+                  {CLASS_NUMS.map(n => {
+                    const t = teachers.find(t => t.classNum === n);
+                    const isOn = classInfo.classNum === String(n);
+                    return (
+                      <button key={n} type="button"
+                        className={`sel-btn${isOn ? " on" : ""}`}
+                        onClick={() => setCI(c => ({ ...c, classNum: String(n) }))}>
+                        <div style={{ fontWeight:700, fontSize:16 }}>{n}반</div>
+                        {t && <div style={{ fontSize:11, color: isOn ? "var(--blue-dk)" : "var(--g500)", marginTop:2 }}>{t.teacherName} 선생님</div>}
+                      </button>
+                    );
+                  })}
                 </div>
               </Field>
 
@@ -1086,7 +1044,6 @@ export default function App() {
 
   return (
     <>
-      <GS />
       {view==="home"      && <HomePage onStudent={()=>setView("student")} onTeacher={()=>setView("login")} />}
       {view==="student"   && <StudentSurvey onBack={()=>setView("home")} />}
       {view==="login"     && <TeacherLogin onLogin={t=>{setTeacher(t);setView("dashboard");}} onBack={()=>setView("home")} />}
