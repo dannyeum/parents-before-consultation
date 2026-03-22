@@ -593,7 +593,7 @@ function TeacherLogin({ onLogin, onBack }) {
           style={{ marginBottom: 8 }}
         />
         {err && <p style={{ color: "#F47C9A", fontSize: 13, marginBottom: 8 }}>{err}</p>}
-        <p style={{ fontSize: 11, color: "#C8CDD8", marginBottom: 16 }}>힌트: teacher1234</p>
+        <p style={{ fontSize: 11, color: "#C8CDD8", marginBottom: 16 }}>힌트: t******1234</p>
         <div style={{ display: "flex", gap: 10 }}>
           <Btn onClick={onBack} color="ghost" style={{ flex: 1, justifyContent: "center" }}>취소</Btn>
           <Btn onClick={go} color="mint" style={{ flex: 2, justifyContent: "center" }}>로그인</Btn>
