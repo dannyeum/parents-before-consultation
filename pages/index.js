@@ -128,9 +128,9 @@ const SECTIONS = [
 /* ══════════════════════════════════════════════════════
    HELPERS
 ══════════════════════════════════════════════════════ */
-const CURRENT_YEAR = new Date().getFullYear();
-const YEARS = [CURRENT_YEAR, CURRENT_YEAR - 1];
+const YEARS  = [2026, 2027, 2028];
 const GRADES = [1, 2, 3, 4, 5, 6];
+const CLASS_NUMS = [1, 2, 3, 4, 5, 6, 7, 8]; // 1반~8반 고정
 
 const FLAG_KW = ["스트레스","걱정","불안","힘들","외로","혼자","포기","무섭","슬퍼","다퉜","속상","싸움","왕따","때려","맞았","싫어"];
 const STR_KW  = ["잘해요","뿌듯","자랑","좋아요","행복","즐거","자신있","재미있"];
@@ -274,7 +274,7 @@ function StudentSurvey({ onBack }) {
 
   const set = (qid, val) => setAns(a => ({ ...a, [qid]: val }));
 
-  const canNextClass = () => !!classInfo.classNum && !!teacherInfo;
+  const canNextClass = () => !!classInfo.classNum;
 
   const canNextSection = () => {
     if (step === -1) return name.trim().length > 0;
@@ -287,8 +287,7 @@ function StudentSurvey({ onBack }) {
   };
 
   const handleClassNext = () => {
-    const t = teachers.find(t => t.classNum === Number(classInfo.classNum));
-    setTI(t);
+    setTI(null); // Firebase 담임 연결 없이 직접 선택
     setStep(-1);
   };
 
@@ -317,7 +316,7 @@ function StudentSurvey({ onBack }) {
         <h2 style={{ fontFamily:"'Gowun Dodum'", fontSize:26, marginBottom:10 }}>설문 완성!</h2>
         <p style={{ color:"var(--g500)", lineHeight:1.9, marginBottom:10 }}>
           <strong>{classInfo.year}학년도 {classInfo.grade}학년 {classInfo.classNum}반</strong><br />
-          {teacherInfo?.teacherName} 선생님 반 · {name} 학생
+          {name} 학생
         </p>
         <p style={{ color:"var(--g500)", fontSize:14, marginBottom:28 }}>{term} 설문에 참여해줘서 고마워요 😊</p>
         <Btn onClick={onBack} variant="primary">처음 화면으로</Btn>
@@ -360,7 +359,7 @@ function StudentSurvey({ onBack }) {
               </div>
 
               <Field label="학년도" required>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
                   {YEARS.map(y => (
                     <button key={y} type="button" className={`sel-btn${classInfo.year === y ? " on" : ""}`}
                       onClick={() => setCI(c => ({ ...c, year:y }))}>📅 {y}학년도</button>
@@ -378,23 +377,15 @@ function StudentSurvey({ onBack }) {
               </Field>
 
               <Field label="반" required>
-                {teachers.length === 0 ? (
-                  <div style={{ padding:"16px", background:"var(--g100)", borderRadius:"var(--r-sm)", textAlign:"center" }}>
-                    <p style={{ color:"var(--g500)", fontSize:13 }}>📭 등록된 반이 없어요<br /><small>선생님께 문의해 주세요</small></p>
-                  </div>
-                ) : (
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))", gap:8 }}>
-                    {teachers.sort((a,b) => a.classNum - b.classNum).map(t => (
-                      <button key={t.id} type="button"
-                        className={`sel-btn${classInfo.classNum === String(t.classNum) ? " on" : ""}`}
-                        onClick={() => setCI(c => ({ ...c, classNum: String(t.classNum) }))}>
-                        <div style={{ fontSize:18, marginBottom:4 }}>🏷️</div>
-                        <div style={{ fontWeight:700 }}>{t.classNum}반</div>
-                        <div style={{ fontSize:12, color:"var(--g500)", marginTop:2 }}>{t.teacherName} 선생님</div>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
+                  {CLASS_NUMS.map(n => (
+                    <button key={n} type="button"
+                      className={`sel-btn${classInfo.classNum === String(n) ? " on" : ""}`}
+                      onClick={() => setCI(c => ({ ...c, classNum: String(n) }))}>
+                      <div style={{ fontWeight:700, fontSize:16 }}>{n}반</div>
+                    </button>
+                  ))}
+                </div>
               </Field>
 
               <Btn onClick={handleClassNext} disabled={!canNextClass()} variant="primary" size="lg" style={{ width:"100%", justifyContent:"center" }}>
@@ -408,11 +399,9 @@ function StudentSurvey({ onBack }) {
         {step === -1 && (
           <div className="fu">
             <div className="card" style={{ marginBottom:16 }}>
-              {teacherInfo && (
-                <div style={{ background:"var(--blue-lt)", borderRadius:"var(--r-sm)", padding:"10px 14px", marginBottom:20, fontSize:13 }}>
-                  📌 {classInfo.year}학년도 {classInfo.grade}학년 {classInfo.classNum}반 · <strong>{teacherInfo.teacherName}</strong> 선생님 반
-                </div>
-              )}
+              <div style={{ background:"var(--blue-lt)", borderRadius:"var(--r-sm)", padding:"10px 14px", marginBottom:20, fontSize:13 }}>
+                📌 {classInfo.year}학년도 {classInfo.grade}학년 {classInfo.classNum}반
+              </div>
               <div style={{ textAlign:"center", marginBottom:22 }}>
                 <div style={{ fontSize:48, marginBottom:8 }}>👋</div>
                 <h2 style={{ fontFamily:"'Gowun Dodum'", fontSize:22, marginBottom:6 }}>안녕하세요!</h2>
