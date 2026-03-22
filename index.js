@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   saveTeacher, getTeacher, getAllTeachers, getTeachersByGrade,
   saveSurvey, getSurveysByClass, getSurveysByGrade,
+  deleteSurvey, deleteAllSurveysByClass,
 } from "../lib/firebase";
 
 /* ══════════════════════════════════════════════════════
@@ -250,7 +251,7 @@ function StudentSurvey({ onBack }) {
   const [step, setStep]     = useState("class");
   const [classInfo, setCI]  = useState({ year: 2026, grade: 6, classNum: "" });
   const [teachers, setTeachers] = useState([]);
-  const [teacherInfo, setTI] = useState(null); // 선택된 담임
+  const [teacherInfo, setTI] = useState(null);
   const [name, setName]     = useState("");
   const [term, setTerm]     = useState("1차");
   const [answers, setAns]   = useState({});
@@ -259,13 +260,19 @@ function StudentSurvey({ onBack }) {
   const topRef = useRef(null);
   const total  = SECTIONS.length;
 
-  // 반은 1~8 고정이므로 Firebase 조회 불필요
+  // Firebase에 담임이 등록되어 있으면 이름 표시용으로 로드 (없어도 동작)
+  useEffect(() => {
+    getAllTeachers(classInfo.year).catch(() => []).then(list => {
+      setTeachers(list.filter(t => t.grade === Number(classInfo.grade)));
+    });
+  }, [classInfo.year, classInfo.grade]);
 
   useEffect(() => { topRef.current?.scrollTo({ top:0, behavior:"smooth" }); }, [step]);
 
   const set = (qid, val) => setAns(a => ({ ...a, [qid]: val }));
 
-  const canNextClass = () => !!classInfo.classNum;
+  // ★ classNum 이 비어있지 않으면 무조건 활성화
+  const canNextClass = () => String(classInfo.classNum).trim() !== "";
 
   const canNextSection = () => {
     if (step === -1) return name.trim().length > 0;
@@ -278,7 +285,9 @@ function StudentSurvey({ onBack }) {
   };
 
   const handleClassNext = () => {
-    setTI(null); // Firebase 담임 연결 없이 직접 선택
+    // Firebase에 담임 정보 있으면 연결, 없어도 진행
+    const t = teachers.find(t => t.classNum === Number(classInfo.classNum));
+    setTI(t || null);
     setStep(-1);
   };
 
@@ -369,13 +378,18 @@ function StudentSurvey({ onBack }) {
 
               <Field label="반" required>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
-                  {CLASS_NUMS.map(n => (
-                    <button key={n} type="button"
-                      className={`sel-btn${classInfo.classNum === String(n) ? " on" : ""}`}
-                      onClick={() => setCI(c => ({ ...c, classNum: String(n) }))}>
-                      <div style={{ fontWeight:700, fontSize:16 }}>{n}반</div>
-                    </button>
-                  ))}
+                  {CLASS_NUMS.map(n => {
+                    const t = teachers.find(t => t.classNum === n);
+                    const isOn = classInfo.classNum === String(n);
+                    return (
+                      <button key={n} type="button"
+                        className={`sel-btn${isOn ? " on" : ""}`}
+                        onClick={() => setCI(c => ({ ...c, classNum: String(n) }))}>
+                        <div style={{ fontWeight:700, fontSize:16 }}>{n}반</div>
+                        {t && <div style={{ fontSize:11, color: isOn ? "var(--blue-dk)" : "var(--g500)", marginTop:2 }}>{t.teacherName} 선생님</div>}
+                      </button>
+                    );
+                  })}
                 </div>
               </Field>
 
@@ -612,39 +626,60 @@ function TeacherDashboard({ teacher, onBack, onSelect, onLogout }) {
   const [gradeSurveys, setGS]   = useState([]);
   const [gradeTeachers, setGT]  = useState([]);
   const [loading, setLoading]   = useState(true);
-  const [viewMode, setViewMode] = useState("myClass"); // myClass | grade
+  const [viewMode, setViewMode] = useState("myClass");
   const [search, setSearch]     = useState("");
   const [filterTerm, setFilter] = useState("전체");
   const [filterClass, setFC]    = useState("전체");
+  // 삭제 관련 state
+  const [deleting, setDeleting]     = useState(false);
+  const [confirmModal, setConfirm]  = useState(null); // { type: "one"|"all", survey?: s }
 
-  useEffect(() => {
+  const reload = () => {
+    setLoading(true);
     Promise.all([
       getSurveysByClass(teacher.year, teacher.grade, teacher.classNum),
       getSurveysByGrade(teacher.year, teacher.grade),
       getTeachersByGrade(teacher.year, teacher.grade),
     ]).then(([mine, grade, teachers]) => {
-      setSurveys(mine);
-      setGS(grade);
-      setGT(teachers);
-      setLoading(false);
+      setSurveys(mine); setGS(grade); setGT(teachers); setLoading(false);
     }).catch(e => { alert("불러오기 오류: " + e.message); setLoading(false); });
-  }, [teacher]);
+  };
+
+  useEffect(() => { reload(); }, [teacher]);
+
+  // ── 개별 삭제 ──
+  const handleDeleteOne = async (survey) => {
+    setDeleting(true);
+    try {
+      await deleteSurvey(survey.id);
+      reload();
+    } catch(e) { alert("삭제 오류: " + e.message); }
+    setDeleting(false);
+    setConfirm(null);
+  };
+
+  // ── 전체 삭제 (우리 반) ──
+  const handleDeleteAll = async () => {
+    setDeleting(true);
+    try {
+      const cnt = await deleteAllSurveysByClass(teacher.year, teacher.grade, teacher.classNum);
+      alert(`${cnt}건의 설문이 삭제되었습니다.`);
+      reload();
+    } catch(e) { alert("삭제 오류: " + e.message); }
+    setDeleting(false);
+    setConfirm(null);
+  };
 
   const display = viewMode === "myClass" ? surveys : gradeSurveys;
   const byName  = {};
   display.forEach(s => { if (!byName[s.name]) byName[s.name]=[]; byName[s.name].push(s.term); });
-
-  // unique class numbers in grade
   const classNums = [...new Set(gradeSurveys.map(s => s.classNum))].sort();
-
   const filtered = display.filter(s =>
     s.name.includes(search) &&
     (filterTerm === "전체" || s.term === filterTerm) &&
     (viewMode === "myClass" || filterClass === "전체" || s.classNum === Number(filterClass))
   );
   const flagCount = display.filter(hasFlag).length;
-
-  // Grade stats
   const gradeStats = gradeTeachers.map(t => {
     const cls = gradeSurveys.filter(s => s.classNum === t.classNum);
     return { ...t, count: cls.length, flagCount: cls.filter(hasFlag).length };
@@ -652,7 +687,45 @@ function TeacherDashboard({ teacher, onBack, onSelect, onLogout }) {
 
   return (
     <div style={{ minHeight:"100vh", background:"var(--g100)" }}>
-      {/* header */}
+
+      {/* ── 확인 모달 ── */}
+      {confirmModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:100,
+          display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+          <div className="card" style={{ maxWidth:360, width:"100%", textAlign:"center", animation:"fadeUp .25s ease" }}>
+            <div style={{ fontSize:52, marginBottom:12 }}>
+              {confirmModal.type === "one" ? "🗑️" : "⚠️"}
+            </div>
+            <h3 style={{ fontWeight:700, fontSize:17, marginBottom:10 }}>
+              {confirmModal.type === "one"
+                ? `${confirmModal.survey.name} 학생의 ${confirmModal.survey.term} 설문을 삭제할까요?`
+                : `우리 반 설문 ${surveys.length}건을 전체 삭제할까요?`}
+            </h3>
+            <p style={{ color:"var(--g500)", fontSize:13, marginBottom:20, lineHeight:1.7 }}>
+              {confirmModal.type === "one"
+                ? "삭제하면 복구할 수 없습니다."
+                : "삭제하면 복구할 수 없습니다.
+학년 전체 탭의 다른 반 데이터는 유지됩니다."}
+            </p>
+            <div style={{ display:"flex", gap:10 }}>
+              <Btn onClick={() => setConfirm(null)} variant="ghost" style={{ flex:1, justifyContent:"center" }}>
+                취소
+              </Btn>
+              <Btn
+                onClick={() => confirmModal.type === "one"
+                  ? handleDeleteOne(confirmModal.survey)
+                  : handleDeleteAll()}
+                disabled={deleting}
+                variant="rose"
+                style={{ flex:1, justifyContent:"center" }}>
+                {deleting ? <><div className="spinner"/>삭제 중...</> : "삭제"}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 헤더 ── */}
       <div style={{ background:"var(--w)", padding:"14px 18px", boxShadow:"var(--sh-sm)", position:"sticky", top:0, zIndex:10 }}>
         <div style={{ maxWidth:900, margin:"0 auto" }}>
           <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", marginBottom:10 }}>
@@ -669,7 +742,6 @@ function TeacherDashboard({ teacher, onBack, onSelect, onLogout }) {
               <button onClick={onLogout} style={{ background:"var(--g100)", border:"none", borderRadius:"var(--r-sm)", padding:"6px 12px", cursor:"pointer", fontSize:12, color:"var(--g500)" }}>로그아웃</button>
             </div>
           </div>
-          {/* view mode tabs */}
           <div style={{ display:"flex", gap:6 }}>
             <button className={`tab-btn${viewMode==="myClass"?" on":""}`} onClick={()=>setViewMode("myClass")}>
               🏷️ 우리 반 ({surveys.length}명)
@@ -683,7 +755,7 @@ function TeacherDashboard({ teacher, onBack, onSelect, onLogout }) {
 
       <div style={{ maxWidth:900, margin:"0 auto", padding:"18px 16px 60px" }}>
 
-        {/* 학년 통계 요약 (학년 전체 탭에서만) */}
+        {/* 학년 통계 */}
         {viewMode === "grade" && gradeStats.length > 0 && (
           <div className="card fu" style={{ marginBottom:16 }}>
             <h3 style={{ fontWeight:700, fontSize:15, marginBottom:14 }}>📊 {teacher.grade}학년 반별 현황</h3>
@@ -702,9 +774,10 @@ function TeacherDashboard({ teacher, onBack, onSelect, onLogout }) {
           </div>
         )}
 
-        {/* filter bar */}
+        {/* 필터 바 + 전체 삭제 버튼 */}
         <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap", alignItems:"center" }}>
-          <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 이름 검색..." style={{ maxWidth:200, marginBottom:0 }} />
+          <input type="text" value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="🔍 이름 검색..." style={{ maxWidth:180, marginBottom:0 }} />
           {["전체","1차","2차"].map(t=>(
             <button key={t} className={`tab-btn${filterTerm===t?" on":""}`} onClick={()=>setFilter(t)}>{t}</button>
           ))}
@@ -713,10 +786,24 @@ function TeacherDashboard({ teacher, onBack, onSelect, onLogout }) {
               {c==="전체"?"전체 반":`${c}반`}
             </button>
           ))}
+          {/* 전체 삭제 버튼 — 우리 반 탭에서만, 데이터 있을 때만 */}
+          {viewMode === "myClass" && surveys.length > 0 && (
+            <button
+              onClick={() => setConfirm({ type:"all" })}
+              style={{ marginLeft:"auto", border:"2px solid var(--rose)", background:"var(--rose-lt)",
+                borderRadius:"var(--r-sm)", padding:"8px 16px", cursor:"pointer",
+                fontFamily:"'Noto Sans KR',sans-serif", fontWeight:700, fontSize:13,
+                color:"var(--rose)", display:"flex", alignItems:"center", gap:6, transition:"all .18s" }}>
+              🗑️ 전체 삭제
+            </button>
+          )}
         </div>
 
         {loading ? (
-          <div className="card" style={{ textAlign:"center", padding:60 }}><div style={{ fontSize:40, marginBottom:12 }}>⏳</div><p style={{ color:"var(--g500)" }}>불러오는 중...</p></div>
+          <div className="card" style={{ textAlign:"center", padding:60 }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>⏳</div>
+            <p style={{ color:"var(--g500)" }}>불러오는 중...</p>
+          </div>
         ) : filtered.length === 0 ? (
           <div className="card fu" style={{ textAlign:"center", padding:60 }}>
             <div style={{ fontSize:64, marginBottom:14 }}>📭</div>
@@ -728,24 +815,39 @@ function TeacherDashboard({ teacher, onBack, onSelect, onLogout }) {
             {filtered.map(s => {
               const flagged = hasFlag(s);
               const hasBoth = byName[s.name]?.includes("1차") && byName[s.name]?.includes("2차");
-              const moodVal = Object.values(s.answers||{}).find(v => typeof v==="string" && ["😄","😊","😐","😔","😢"].some(e=>v.startsWith(e)));
+              const moodVal = Object.values(s.answers||{}).find(v =>
+                typeof v==="string" && ["😄","😊","😐","😔","😢"].some(e=>v.startsWith(e)));
               return (
-                <div key={s.id} className="lift card" onClick={()=>onSelect(s, surveys)}
-                  style={{ border:flagged?"2px solid #FFE5E5":"2px solid transparent", animation:"fadeUp .4s ease both" }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
-                    <span style={{ fontSize:32 }}>👤</span>
-                    <div style={{ display:"flex", flexDirection:"column", gap:4, alignItems:"flex-end" }}>
-                      {flagged && <span style={{ fontSize:10, color:"var(--rose)", fontWeight:700, background:"var(--rose-lt)", borderRadius:999, padding:"2px 8px" }}>⚠️ 주의</span>}
-                      {hasBoth && <span style={{ fontSize:10, color:"var(--teal)", fontWeight:700, background:"var(--teal-lt)", borderRadius:999, padding:"2px 8px" }}>↔ 비교</span>}
-                      <span style={{ fontSize:18 }}>{moodVal?.split(" ")[0]||"😐"}</span>
+                <div key={s.id} className="card"
+                  style={{ border:flagged?"2px solid #FFE5E5":"2px solid transparent",
+                    animation:"fadeUp .4s ease both", position:"relative" }}>
+                  {/* 개별 삭제 버튼 */}
+                  <button
+                    onClick={e => { e.stopPropagation(); setConfirm({ type:"one", survey:s }); }}
+                    title="이 설문 삭제"
+                    style={{ position:"absolute", top:10, right:10, background:"var(--rose-lt)",
+                      border:"none", borderRadius:8, width:28, height:28, cursor:"pointer",
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      fontSize:14, color:"var(--rose)", transition:"all .18s", zIndex:2 }}>
+                    🗑
+                  </button>
+                  {/* 카드 클릭 → 상세 보기 */}
+                  <div onClick={()=>onSelect(s, surveys)} style={{ cursor:"pointer" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
+                      <span style={{ fontSize:32 }}>👤</span>
+                      <div style={{ display:"flex", flexDirection:"column", gap:4, alignItems:"flex-end", paddingRight:32 }}>
+                        {flagged && <span style={{ fontSize:10, color:"var(--rose)", fontWeight:700, background:"var(--rose-lt)", borderRadius:999, padding:"2px 8px" }}>⚠️ 주의</span>}
+                        {hasBoth && <span style={{ fontSize:10, color:"var(--teal)", fontWeight:700, background:"var(--teal-lt)", borderRadius:999, padding:"2px 8px" }}>↔ 비교</span>}
+                        <span style={{ fontSize:18 }}>{moodVal?.split(" ")[0]||"😐"}</span>
+                      </div>
                     </div>
+                    <h3 style={{ fontWeight:700, fontSize:15, marginBottom:4 }}>{s.name}</h3>
+                    <div style={{ display:"flex", gap:6, marginBottom:4, flexWrap:"wrap" }}>
+                      <Tag color={s.term==="1차"?"blue":"mint"}>{s.term}</Tag>
+                      {viewMode==="grade"&&<Tag color="gray">{s.classNum}반</Tag>}
+                    </div>
+                    <p style={{ fontSize:11, color:"var(--g500)" }}>{s.submittedAt}</p>
                   </div>
-                  <h3 style={{ fontWeight:700, fontSize:15, marginBottom:4 }}>{s.name}</h3>
-                  <div style={{ display:"flex", gap:6, marginBottom:4, flexWrap:"wrap" }}>
-                    <Tag color={s.term==="1차"?"blue":"mint"}>{s.term}</Tag>
-                    {viewMode==="grade"&&<Tag color="gray">{s.classNum}반</Tag>}
-                  </div>
-                  <p style={{ fontSize:11, color:"var(--g500)" }}>{s.submittedAt}</p>
                 </div>
               );
             })}
