@@ -248,7 +248,7 @@ function HomePage({ onStudent, onTeacher }) {
 function StudentSurvey({ onBack }) {
   // step: "class" → -1(이름/차수) → 0..N(섹션) → done
   const [step, setStep]     = useState("class");
-  const [classInfo, setCI]  = useState({ year: CURRENT_YEAR, grade: 6, classNum: "" });
+  const [classInfo, setCI]  = useState({ year: 2026, grade: 6, classNum: "" });
   const [teachers, setTeachers] = useState([]);
   const [teacherInfo, setTI] = useState(null); // 선택된 담임
   const [name, setName]     = useState("");
