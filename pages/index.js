@@ -259,16 +259,7 @@ function StudentSurvey({ onBack }) {
   const topRef = useRef(null);
   const total  = SECTIONS.length;
 
-  // 학년 선택 시 해당 학년 담임 목록 로드
-  useEffect(() => {
-    if (classInfo.year && classInfo.grade) {
-      getAllTeachers(classInfo.year).then(list => {
-        setTeachers(list.filter(t => t.grade === Number(classInfo.grade)));
-        setTI(null);
-        setCI(ci => ({ ...ci, classNum: "" }));
-      });
-    }
-  }, [classInfo.year, classInfo.grade]);
+  // 반은 1~8 고정이므로 Firebase 조회 불필요
 
   useEffect(() => { topRef.current?.scrollTo({ top:0, behavior:"smooth" }); }, [step]);
 
@@ -474,14 +465,14 @@ function StudentSurvey({ onBack }) {
 function TeacherLogin({ onLogin, onBack }) {
   const [tab, setTab]         = useState("login"); // login | setup
   // login
-  const [year, setYear]       = useState(CURRENT_YEAR);
+  const [year, setYear]       = useState(2026);
   const [grade, setGrade]     = useState(6);
   const [classNum, setClass]  = useState("");
   const [pw, setPw]           = useState("");
   const [err, setErr]         = useState("");
   const [loading, setLoading] = useState(false);
   // setup
-  const [sYear, setSYear]     = useState(CURRENT_YEAR);
+  const [sYear, setSYear]     = useState(2026);
   const [sGrade, setSGrade]   = useState(6);
   const [sClass, setSClass]   = useState("");
   const [sName, setSName]     = useState("");
